@@ -9,16 +9,16 @@ import (
 )
 
 type Item struct {
-	Task string
+	Task   string
 	Status string
 }
 
 type Service struct {
 	todos []Item
-	db    *db.DB
+	db    db.Interface
 }
 
-func NewService(db *db.DB) *Service {
+func NewService(db db.Interface) *Service {
 	return &Service{
 		todos: make([]Item, 0),
 		db:    db,
@@ -31,8 +31,8 @@ func (svc *Service) Add(todo string) error {
 			return errors.New("todo is not unique")
 		}
 	}
-	svc.todos = append(svc.todos, Item {
-		Task: todo,
+	svc.todos = append(svc.todos, Item{
+		Task:   todo,
 		Status: "TO_BE_STARTED",
 	})
 	return nil

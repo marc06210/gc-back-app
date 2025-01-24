@@ -12,6 +12,11 @@ type DB struct {
 	pool *pgxpool.Pool
 }
 
+type Interface interface {
+	GetAllPublications() ([]model.Publication, error)
+	Close()
+}
+
 func New(username, password, dbname, host string, port int) (*DB, error) {
 	connStr := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", username, password, host, port, dbname)
 	pool, err := pgxpool.New(context.Background(), connStr)
