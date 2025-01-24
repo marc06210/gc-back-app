@@ -43,7 +43,6 @@ func NewServer(todoSvc *todo.Service) *Server {
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		writer.WriteHeader(http.StatusOK)
 	})
 
 	mux.HandleFunc("GET /todo", func(writer http.ResponseWriter, request *http.Request) {
