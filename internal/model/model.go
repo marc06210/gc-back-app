@@ -1,14 +1,18 @@
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // my custom type for the icons
 // in database it is saved as an int
 type Icon int64
 const (
 	SPRING Icon = 0
-	ISTIO      = 1
-	ECS        = 2
+	ISTIO      	= 1
+	ECS        	= 2
+	UNK 		= -99
 )
 
 // this methods translate the enum value into a string representation
@@ -23,6 +27,15 @@ func (s Icon) String() string {
 		return "ecs"
 	}
 	return "unknown"
+}
+
+func IconOf(representation string) (Icon, error) {
+	switch representation {
+	case "spring": return SPRING, nil
+	case "istio": return ISTIO, nil
+	case "ecs": return ECS, nil
+	}
+	return UNK, errors.New("unknown representation")
 }
 
 type Publication struct {

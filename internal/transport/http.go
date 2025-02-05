@@ -1,7 +1,8 @@
 package transport
 
 import (
-	"encoding/json"
+	"github.com/gin-gonic/gin"
+	"github.com/marc06210/gc-back-app/internal/model"
 	"github.com/marc06210/gc-back-app/internal/todo"
 	"log"
 	"net/http"
@@ -23,68 +24,66 @@ type PublicationItem struct {
 }
 
 type Server struct {
-	mux *http.ServeMux
+	router *gin.Engine
+}
+
+// This handler extract the error from any following handler
+// prints it and then return a 500 HTTP error code with
+// no additionnal information
+func errorHandler(c *gin.Context) {
+	c.Next()
+
+	for _, err := range c.Errors {
+		// log, handle, etc.
+		log.Printf("Error detected: %s\n", err)
+	}
+
+	c.JSON(http.StatusInternalServerError, "")
+}
+
+func postArticle(context *gin.Context) {
+	var publicationItem PublicationItem
+	err := context.BindJSON(&publicationItem)
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	publicationItem.Creationts = now
+
+	publicationIcon, err := model.IconOf(publicationItem.Icon)
+	if err != nil {
+		context.Error(err)
+		return
+	}
+
+	log.Printf("Publication to create: %s with %d icon\n", publicationItem, publicationIcon)
+	context.JSON(http.StatusNotImplemented, "")
 }
 
 func NewServer(todoSvc *todo.Service) *Server {
 
-	mux := http.NewServeMux()
+	router := gin.Default()
 
-	mux.HandleFunc("GET /api/publications", func(writer http.ResponseWriter, request *http.Request) {
+	router.Use(errorHandler)
+
+	router.GET("/api/publications", func(context *gin.Context) {
 		publications, err := todoSvc.GetAllPublications()
 		if err != nil {
-			log.Println(err)
-			writer.WriteHeader(http.StatusInternalServerError)
+			context.Error(err)
 			return
 		}
-		err = json.NewEncoder(writer).Encode(publications)
+		context.JSON(http.StatusOK, publications)
 		if err != nil {
-			log.Println(err)
-			writer.WriteHeader(http.StatusInternalServerError)
+			context.Error(err)
 			return
 		}
 	})
 
-	mux.HandleFunc("GET /todo", func(writer http.ResponseWriter, request *http.Request) {
+	router.POST("/api/publications", postArticle)
 
-		b, err2 := json.Marshal(todoSvc.GetAll())
-		if err2 != nil {
-			log.Println(err2)
-			writer.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		_, err := writer.Write(b)
-		if err != nil {
-			log.Println(err2)
-			writer.WriteHeader(http.StatusInternalServerError)
-
-		}
-		writer.WriteHeader(http.StatusOK)
-	})
-
-	mux.HandleFunc("POST /todo", func(writer http.ResponseWriter, request *http.Request) {
-		var t TodoItem
-		err := json.NewDecoder(request.Body).Decode(&t)
-		if err != nil {
-			log.Println(err)
-			writer.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		err = todoSvc.Add(t.Item)
-		if err != nil {
-			log.Println(err)
-			writer.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		writer.WriteHeader(http.StatusCreated)
-		return
-	})
-
-	return &Server{
-		mux: mux,
-	}
+	return &Server{router: router}
 }
 
 func (s *Server) Serve() error {
-	return http.ListenAndServe(":8080", s.mux)
+	return s.router.Run(":8080")
 }

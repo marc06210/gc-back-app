@@ -10,3 +10,14 @@ POST http://localhost:8080/todo
 
 ### GET request to example server
 GET http://localhost:8080/api/publications
+
+###
+POST http://localhost:8080/api/publications
+
+{
+"description": "this is my description",
+"icon": "spring",
+"Host": "localhost",
+"title": "one title",
+"utl": "https://blabla"
+}
