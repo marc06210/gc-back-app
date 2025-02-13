@@ -3,8 +3,8 @@ package transport
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/marc06210/gc-back-app/internal/model"
-	"github.com/marc06210/gc-back-app/internal/todo"
-	"log"
+	"github.com/marc06210/gc-back-app/internal/publication"
+	"go.uber.org/zap"
 	"net/http"
 	"time"
 )
@@ -25,48 +25,73 @@ type PublicationItem struct {
 
 type Server struct {
 	router *gin.Engine
+	logger *zap.Logger
 }
 
 // This handler extract the error from any following handler
 // prints it and then return a 500 HTTP error code with
 // no additionnal information
-func errorHandler(c *gin.Context) {
+func errorHandler(c *gin.Context, logger *zap.Logger) {
 	c.Next()
 
 	for _, err := range c.Errors {
 		// log, handle, etc.
-		log.Printf("Error detected: %s\n", err)
+		logger.Error("Error detected: %s\n", zap.Error(err))
 	}
 
 	c.JSON(http.StatusInternalServerError, "")
 }
+func zapLoggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
 
-func postArticle(context *gin.Context) {
-	var publicationItem PublicationItem
-	err := context.BindJSON(&publicationItem)
-	if err != nil {
-		return
+		// Process request
+		c.Next()
+
+		// Log details after request processing
+		logger.Info("Request",
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.Int("status", c.Writer.Status()),
+			zap.String("client_ip", c.ClientIP()),
+			zap.Duration("latency", time.Since(start)),
+		)
 	}
-	now := time.Now()
-	publicationItem.Creationts = now
-
-	publicationIcon, err := model.IconOf(publicationItem.Icon)
-	if err != nil {
-		context.Error(err)
-		return
-	}
-
-	log.Printf("Publication to create: %s with %d icon\n", publicationItem, publicationIcon)
-	context.JSON(http.StatusNotImplemented, "")
 }
 
-func NewServer(todoSvc *todo.Service) *Server {
+func postArticle(logger *zap.Logger) gin.HandlerFunc {
+	return func(context *gin.Context) {
+		var publicationItem PublicationItem
+		err := context.BindJSON(&publicationItem)
+		if err != nil {
+			return
+		}
+		now := time.Now()
+		publicationItem.Creationts = now
+
+		publicationIcon, err := model.IconOf(publicationItem.Icon)
+		if err != nil {
+			context.Error(err)
+			return
+		}
+
+		logger.Debug("Creating publication", zap.Any("publication ", publicationItem), zap.String("icon", publicationIcon.String()))
+		context.JSON(http.StatusNotImplemented, "")
+	}
+}
+
+func NewServer(todoSvc *publication.Service, logger *zap.Logger) *Server {
 
 	router := gin.Default()
 
-	router.Use(errorHandler)
+	// two ways to define handlers injecting the logger
+	router.Use(func(context *gin.Context) {
+		errorHandler(context, logger)
+	})
+	router.Use(zapLoggerMiddleware(logger))
 
 	router.GET("/api/publications", func(context *gin.Context) {
+		logger.Debug("Getting all publications")
 		publications, err := todoSvc.GetAllPublications()
 		if err != nil {
 			context.Error(err)
@@ -79,11 +104,12 @@ func NewServer(todoSvc *todo.Service) *Server {
 		}
 	})
 
-	router.POST("/api/publications", postArticle)
+	router.POST("/api/publications", postArticle(logger))
 
-	return &Server{router: router}
+	return &Server{router: router, logger: logger}
 }
 
 func (s *Server) Serve() error {
+	s.logger.Info("Starting server")
 	return s.router.Run(":8080")
 }

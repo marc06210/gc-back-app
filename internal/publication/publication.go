@@ -1,4 +1,4 @@
-package todo
+package publication
 
 import (
 	"errors"
